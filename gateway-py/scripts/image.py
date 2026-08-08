@@ -196,11 +196,13 @@ def fmt_pct(b: int, tot: int) -> str:
 
 @app.command()
 def diagnostics(
-    image_name: Annotated[str, typer.Argument(help="Image repository name")] = IMAGE_NAME,
+    image_name: Annotated[
+        str, typer.Argument(help="Image repository name")
+    ] = IMAGE_NAME,
     tag: Annotated[str, typer.Argument(help="Image tag")] = TAG,
-    archive_path: Annotated[str, typer.Argument(help="Path to exported OCI archive")] = str(
-        ARCHIVE_PATH
-    ),
+    archive_path: Annotated[
+        str, typer.Argument(help="Path to exported OCI archive")
+    ] = str(ARCHIVE_PATH),
 ) -> None:
     """Display container image size breakdown and archive stats."""
     image_ref = f"{image_name}:{tag}"
@@ -264,7 +266,9 @@ def diagnostics(
     )
 
     if not archive_file.exists():
-        console.print(f"Archive Path:       [cyan]{archive_file}[/] [dim](Not exported yet)[/]")
+        console.print(
+            f"Archive Path:       [cyan]{archive_file}[/] [dim](Not exported yet)[/]"
+        )
         return
 
     arch_size = archive_file.stat().st_size
@@ -273,7 +277,9 @@ def diagnostics(
     factor = total_size / arch_size if arch_size > 0 else 0
     console.print("[bold underline]--- Compressed Export Archive ---[/]")
     console.print(f"Archive Path:       [cyan]{archive_file}[/]")
-    console.print(f"Archive Size:       [green]{fmt_size(arch_size)}[/] ({arch_size:,} bytes)")
+    console.print(
+        f"Archive Size:       [green]{fmt_size(arch_size)}[/] ({arch_size:,} bytes)"
+    )
     console.print(
         f"Compression Ratio:  [yellow]{ratio:.1f}%[/] of original size ({factor:.2f}x compression)\n"
     )

@@ -2,9 +2,9 @@
 
 ARG PYTHON_VERSION=3.14
 
-FROM python:${PYTHON_VERSION}-slim-trixie AS builder
+FROM python:${PYTHON_VERSION}-alpine3.24 AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.2 /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_NO_MANAGED_PYTHON=1 \
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install /tmp/dist/*.whl --target /app/app-packages --no-deps
 
 
-FROM python:${PYTHON_VERSION}-slim-trixie
+FROM python:${PYTHON_VERSION}-alpine3.24
 
 WORKDIR /app
 

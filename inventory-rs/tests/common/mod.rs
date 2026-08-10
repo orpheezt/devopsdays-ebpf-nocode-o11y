@@ -1,7 +1,7 @@
 use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use testcontainers_modules::testcontainers::ContainerAsync;
 use testcontainers_modules::testcontainers::ImageExt;
+use testcontainers_modules::testcontainers::runners::AsyncRunner;
 
 pub fn run_migrations(db_url: &str) {
     let status = std::process::Command::new("cargo")

@@ -11,7 +11,10 @@ pub async fn get_db_pool(config: DbConfig) -> Result<toasty::Db, DbError> {
     loop {
         attempt += 1;
         match toasty::Db::builder()
-            .models(toasty::models![crate::inventory::Inventory, crate::reservations::models::Reservation])
+            .models(toasty::models![
+                crate::inventory::Inventory,
+                crate::reservations::models::Reservation
+            ])
             .connect(&config.url)
             .await
         {

@@ -4,36 +4,36 @@ version = 1
 
 [[schema.tables]]
 id = 0
-name = "reservations"
+name = "inventories"
 primary_key = { columns = [{ table = 0, index = 0 }], index = { table = 0, index = 0 } }
 
 [[schema.tables.columns]]
 id = { table = 0, index = 0 }
-name = "reservation_id"
-ty = "String"
-storage_ty = "Text"
+name = "product_id"
+ty = "Uuid"
+storage_ty = "Uuid"
 
 [[schema.tables.columns]]
 id = { table = 0, index = 1 }
-name = "order_id"
+name = "product_name"
 ty = "String"
 storage_ty = "Text"
 
 [[schema.tables.columns]]
 id = { table = 0, index = 2 }
-name = "items_count"
+name = "stock_quantity"
 ty = "I32"
 storage_ty = { Integer = 4 }
 
 [[schema.tables.columns]]
 id = { table = 0, index = 3 }
-name = "status"
-ty = "String"
-storage_ty = "Text"
+name = "reserved_quantity"
+ty = "I32"
+storage_ty = { Integer = 4 }
 
 [[schema.tables.indices]]
 id = { table = 0, index = 0 }
-name = "index_reservations_by_reservation_id"
+name = "index_inventories_by_product_id"
 on = 0
 columns = [{ column = { table = 0, index = 0 }, op = "Eq", scope = "Partition" }]
 unique = true
@@ -41,36 +41,36 @@ primary_key = true
 
 [[schema.tables]]
 id = 1
-name = "inventories"
+name = "reservations"
 primary_key = { columns = [{ table = 1, index = 0 }], index = { table = 1, index = 0 } }
 
 [[schema.tables.columns]]
 id = { table = 1, index = 0 }
-name = "product_id"
-ty = "String"
-storage_ty = "Text"
+name = "reservation_id"
+ty = "Uuid"
+storage_ty = "Uuid"
 
 [[schema.tables.columns]]
 id = { table = 1, index = 1 }
-name = "product_name"
-ty = "String"
-storage_ty = "Text"
+name = "order_id"
+ty = "Uuid"
+storage_ty = "Uuid"
 
 [[schema.tables.columns]]
 id = { table = 1, index = 2 }
-name = "stock_quantity"
+name = "items_count"
 ty = "I32"
 storage_ty = { Integer = 4 }
 
 [[schema.tables.columns]]
 id = { table = 1, index = 3 }
-name = "reserved_quantity"
-ty = "I32"
-storage_ty = { Integer = 4 }
+name = "status"
+ty = "String"
+storage_ty = "Text"
 
 [[schema.tables.indices]]
 id = { table = 1, index = 0 }
-name = "index_inventories_by_product_id"
+name = "index_reservations_by_reservation_id"
 on = 1
 columns = [{ column = { table = 1, index = 0 }, op = "Eq", scope = "Partition" }]
 unique = true

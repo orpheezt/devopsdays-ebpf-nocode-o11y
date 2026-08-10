@@ -6,3 +6,4 @@ pub mod service;
 
 pub use errors::ReservationError;
 pub use models::Reservation;
+pub use service::ReservationService;

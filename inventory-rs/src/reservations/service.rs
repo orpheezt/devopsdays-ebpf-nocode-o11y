@@ -12,14 +12,17 @@ pub struct ReservationService {
 }
 
 impl ReservationService {
-    pub async fn reserve(&self, payload: ReserveRequest) -> Result<ReserveResponse, ReservationError> {
+    pub async fn reserve(
+        &self,
+        payload: ReserveRequest,
+    ) -> Result<ReserveResponse, ReservationError> {
         if payload.items_count <= 0 {
             return Err(ReservationError::InvalidInput(
                 "items_count must be greater than 0".to_string(),
             ));
         }
 
-        let product_id = payload.product_id.clone();
+        let product_id = payload.product_id;
 
         let mut db = self.db_pool.clone();
 
@@ -33,7 +36,7 @@ impl ReservationService {
 
         if item.stock_quantity < payload.items_count {
             return Err(ReservationError::InsufficientStock {
-                product_id: product_id.clone(),
+                product_id,
                 requested: payload.items_count,
                 available: item.stock_quantity,
             });
@@ -65,10 +68,7 @@ impl ReservationService {
 
         let shipping_info = resp.json::<ShippingInfo>().await.map_err(|err| {
             error!("Failed to parse shipping quote: {}", err);
-            ReservationError::ShippingServiceUnavailable(format!(
-                "Failed to parse quote: {}",
-                err
-            ))
+            ReservationError::ShippingServiceUnavailable(format!("Failed to parse quote: {}", err))
         })?;
 
         let new_reserved = item.reserved_quantity + payload.items_count;
@@ -118,4 +118,3 @@ impl ReservationService {
         })
     }
 }
-

@@ -1,33 +1,16 @@
+mod common;
+
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
 use inventory_rs::Settings;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use tower::ServiceExt;
 
 #[tokio::test]
 async fn test_health_check_endpoint() {
-    let container = Postgres::default()
-        .start()
-        .await
-        .expect("Failed to start Postgres container");
-    let host_port = container
-        .get_host_port_ipv4(5432)
-        .await
-        .expect("Failed to get port");
-    let db_url = format!(
-        "postgres://postgres:postgres@127.0.0.1:{}/postgres",
-        host_port
-    );
-
-    let db_pool = inventory_rs::db::get_db_pool(inventory_rs::db::DbConfig {
-        url: db_url.clone(),
-    })
-    .await
-    .expect("Failed to connect to DB");
+    let (_container, db_url, db_pool) = common::setup_test_db().await;
 
     let settings = Settings {
         db_url,
@@ -74,24 +57,20 @@ async fn test_health_check_endpoint() {
 
 #[tokio::test]
 async fn test_reserve_endpoint_integration() {
-    let container = Postgres::default()
-        .start()
-        .await
-        .expect("Failed to start Postgres container");
-    let host_port = container
-        .get_host_port_ipv4(5432)
-        .await
-        .expect("Failed to get port");
-    let db_url = format!(
-        "postgres://postgres:postgres@127.0.0.1:{}/postgres",
-        host_port
-    );
+    let (_container, db_url, db_pool) = common::setup_test_db().await;
 
-    let db_pool = inventory_rs::db::get_db_pool(inventory_rs::db::DbConfig {
-        url: db_url.clone(),
+    let mut db = db_pool.clone();
+    let product_id = uuid::Uuid::parse_str("0191234a-5b6c-7123-9000-000000000000").unwrap();
+
+    toasty::create!(inventory_rs::inventory::Inventory {
+        product_id,
+        product_name: "Default Product".to_string(),
+        stock_quantity: 100,
+        reserved_quantity: 0,
     })
+    .exec(&mut db)
     .await
-    .expect("Failed to connect to DB");
+    .expect("Failed to seed initial product");
 
     let mock_shipping_app = axum::Router::new().route(
         "/quote",
@@ -117,12 +96,15 @@ async fn test_reserve_endpoint_integration() {
 
     let app = inventory_rs::root_router(db_pool, &settings);
 
+    // 1. Test successful reservation
     let payload = serde_json::json!({
         "order_id": "0191234a-5b6c-7123-9000-000000000001",
+        "product_id": product_id,
         "items_count": 2
     });
 
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -146,10 +128,47 @@ async fn test_reserve_endpoint_integration() {
     assert_eq!(body_json["items_reserved"], 2);
     assert_eq!(body_json["status"], "RESERVED");
     assert!(body_json["reservation_id"].is_string());
-    assert!(
-        !body_json["reservation_id"]
-            .as_str()
-            .unwrap()
-            .starts_with("RES-")
-    );
+
+    // 2. Test invalid items_count <= 0 -> 400 Bad Request
+    let invalid_payload = serde_json::json!({
+        "order_id": "0191234a-5b6c-7123-9000-000000000002",
+        "product_id": product_id,
+        "items_count": -5
+    });
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/reserve")
+                .header("Content-Type", "application/json")
+                .body(Body::from(invalid_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // 3. Test insufficient stock -> 409 Conflict
+    let out_of_stock_payload = serde_json::json!({
+        "order_id": "0191234a-5b6c-7123-9000-000000000003",
+        "product_id": product_id,
+        "items_count": 1000
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/reserve")
+                .header("Content-Type", "application/json")
+                .body(Body::from(out_of_stock_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }

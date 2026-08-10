@@ -14,16 +14,12 @@ async fn main() {
         }
     };
 
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/inventory_db".to_string());
+    let settings = inventory_rs::Settings::load();
 
-    let db = match toasty::Db::builder()
-        .models(toasty::models!(
-            inventory_rs::reservations::Reservation,
-            inventory_rs::inventory::Inventory
-        ))
-        .connect(&db_url)
-        .await
+    let db = match inventory_rs::db::get_db_pool(inventory_rs::db::DbConfig {
+        url: settings.db_url,
+    })
+    .await
     {
         Ok(db) => db,
         Err(err) => {

@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct ReserveRequest {
-    pub order_id: String,
+    pub order_id: Uuid,
+    pub product_id: Uuid,
     pub items_count: i32,
 }
 
@@ -15,8 +17,8 @@ pub struct ShippingInfo {
 
 #[derive(Debug, Serialize)]
 pub struct ReserveResponse {
-    pub reservation_id: String,
-    pub order_id: String,
+    pub reservation_id: Uuid,
+    pub order_id: Uuid,
     pub items_reserved: i32,
     pub status: String,
     pub shipping_info: ShippingInfo,

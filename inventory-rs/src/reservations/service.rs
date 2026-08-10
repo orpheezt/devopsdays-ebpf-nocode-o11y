@@ -16,30 +16,42 @@ impl ReservationService {
         &self,
         payload: ReserveRequest,
     ) -> Result<ReserveResponse, ReservationError> {
-        if payload.items_count <= 0 {
+        let items = payload.normalized_items();
+        if items.is_empty() {
             return Err(ReservationError::InvalidInput(
                 "items_count must be greater than 0".to_string(),
             ));
         }
 
-        let product_id = payload.product_id;
+        for item in &items {
+            if item.quantity <= 0 {
+                return Err(ReservationError::InvalidInput(
+                    "items_count must be greater than 0".to_string(),
+                ));
+            }
+        }
 
         let mut db = self.db_pool.clone();
+        let mut updates = Vec::new();
 
-        let mut item = match Inventory::get_by_product_id(&mut db, &product_id).await {
-            Ok(item) => item,
-            Err(e) => {
-                error!("Failed to fetch inventory item {}: {}", product_id, e);
-                return Err(ReservationError::ProductNotFound(product_id));
+        for item in &items {
+            let inv_item = match Inventory::get_by_product_id(&mut db, &item.product_id).await {
+                Ok(inv) => inv,
+                Err(e) => {
+                    error!("Failed to fetch inventory item {}: {}", item.product_id, e);
+                    return Err(ReservationError::ProductNotFound(item.product_id));
+                }
+            };
+
+            if inv_item.stock_quantity < item.quantity {
+                return Err(ReservationError::InsufficientStock {
+                    product_id: item.product_id,
+                    requested: item.quantity,
+                    available: inv_item.stock_quantity,
+                });
             }
-        };
 
-        if item.stock_quantity < payload.items_count {
-            return Err(ReservationError::InsufficientStock {
-                product_id,
-                requested: payload.items_count,
-                available: item.stock_quantity,
-            });
+            updates.push((inv_item, item.quantity));
         }
 
         let reservation_id = Uuid::now_v7();
@@ -71,23 +83,29 @@ impl ReservationService {
             ReservationError::ShippingServiceUnavailable(format!("Failed to parse quote: {}", err))
         })?;
 
-        let new_reserved = item.reserved_quantity + payload.items_count;
-        let new_stock = item.stock_quantity - payload.items_count;
+        let mut total_reserved: i32 = 0;
+        for (mut inv_item, qty) in updates {
+            let new_reserved = inv_item.reserved_quantity + qty;
+            let new_stock = inv_item.stock_quantity - qty;
 
-        item.update()
-            .reserved_quantity(new_reserved)
-            .stock_quantity(new_stock)
-            .exec(&mut db)
-            .await
-            .map_err(|e| {
-                error!("Failed to update inventory stock: {}", e);
-                ReservationError::DatabaseError("Failed to update inventory stock".to_string())
-            })?;
+            inv_item
+                .update()
+                .reserved_quantity(new_reserved)
+                .stock_quantity(new_stock)
+                .exec(&mut db)
+                .await
+                .map_err(|e| {
+                    error!("Failed to update inventory stock: {}", e);
+                    ReservationError::DatabaseError("Failed to update inventory stock".to_string())
+                })?;
+
+            total_reserved += qty;
+        }
 
         let reservation = Reservation {
             reservation_id,
             order_id: payload.order_id,
-            items_count: payload.items_count,
+            items_count: total_reserved,
             status: "RESERVED".to_string(),
         };
 
@@ -105,14 +123,16 @@ impl ReservationService {
         })?;
 
         info!(
-            "Successfully reserved {} items of product {} for order {}",
-            payload.items_count, product_id, payload.order_id
+            "Successfully reserved {} total items across {} product(s) for order {}",
+            total_reserved,
+            items.len(),
+            payload.order_id
         );
 
         Ok(ReserveResponse {
             reservation_id,
             order_id: payload.order_id,
-            items_reserved: payload.items_count,
+            items_reserved: total_reserved,
             status: "RESERVED".into(),
             shipping_info,
         })

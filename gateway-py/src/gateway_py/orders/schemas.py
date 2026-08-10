@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class OrderItem(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    product_id: str
+    product_id: UUID
     quantity: int = Field(..., gt=0)
     unit_price: Decimal = Field(..., gt=0, decimal_places=2)
 
@@ -28,11 +28,18 @@ class PaymentRequest(BaseModel):
     amount: Decimal = Field(..., gt=0)
 
 
+class InventoryReserveItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    product_id: UUID
+    quantity: int = Field(..., gt=0)
+
+
 class InventoryReserveRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     order_id: UUID
-    items_count: int
+    items: list[InventoryReserveItem] = Field(min_length=1)
 
 
 class OrderSummary(BaseModel):

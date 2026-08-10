@@ -69,7 +69,16 @@ class CheckoutService:
         )
         inv_task = self._client.post(
             f"{self._settings.inventory_url}/reserve",
-            json={"order_id": order_id, "items_count": len(order.items)},
+            json={
+                "order_id": str(order_id),
+                "items": [
+                    {
+                        "product_id": str(item.product_id),
+                        "quantity": item.quantity,
+                    }
+                    for item in order.items
+                ],
+            },
         )
 
         results = await asyncio.gather(pay_task, inv_task, return_exceptions=True)

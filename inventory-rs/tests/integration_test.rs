@@ -96,11 +96,15 @@ async fn test_reserve_endpoint_integration() {
 
     let app = inventory_rs::root_router(db_pool, &settings);
 
-    // 1. Test successful reservation
+    // 1. Test successful reservation using items array
     let payload = serde_json::json!({
         "order_id": "0191234a-5b6c-7123-9000-000000000001",
-        "product_id": product_id,
-        "items_count": 2
+        "items": [
+            {
+                "product_id": product_id,
+                "quantity": 2
+            }
+        ]
     });
 
     let response = app
@@ -129,11 +133,15 @@ async fn test_reserve_endpoint_integration() {
     assert_eq!(body_json["status"], "RESERVED");
     assert!(body_json["reservation_id"].is_string());
 
-    // 2. Test invalid items_count <= 0 -> 400 Bad Request
+    // 2. Test invalid quantity <= 0 -> 400 Bad Request
     let invalid_payload = serde_json::json!({
         "order_id": "0191234a-5b6c-7123-9000-000000000002",
-        "product_id": product_id,
-        "items_count": -5
+        "items": [
+            {
+                "product_id": product_id,
+                "quantity": -5
+            }
+        ]
     });
 
     let response = app
@@ -154,8 +162,12 @@ async fn test_reserve_endpoint_integration() {
     // 3. Test insufficient stock -> 409 Conflict
     let out_of_stock_payload = serde_json::json!({
         "order_id": "0191234a-5b6c-7123-9000-000000000003",
-        "product_id": product_id,
-        "items_count": 1000
+        "items": [
+            {
+                "product_id": product_id,
+                "quantity": 1000
+            }
+        ]
     });
 
     let response = app

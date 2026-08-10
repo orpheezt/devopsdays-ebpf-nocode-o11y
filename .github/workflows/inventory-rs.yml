@@ -2,9 +2,7 @@ name: inventory-rs
 
 on:
   push:
-    branches: [ "master" ]
   pull_request:
-    branches: [ "master" ]
 
 permissions:
   contents: read
@@ -17,7 +15,25 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.17.0
+        with:
+          components: rustfmt
+
+      - name: Rustfmt check
+        uses: actions-rust-lang/rustfmt@v1.1.2
+        with:
+          manifest-path: ./inventory-rs/Cargo.toml
+
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -26,11 +42,42 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - name: Format check
-        run: cargo fmt --all --check
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.17.0
+        with:
+          components: clippy
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features --locked
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inventory-rs
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.17.0
 
       - name: Build
         run: cargo build --locked --verbose
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inventory-rs
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.17.0
 
       - name: Run unit tests
         run: cargo test --locked --verbose --lib --bins

@@ -10,12 +10,12 @@
 
 import json
 import subprocess
-import tomllib
 from collections import Counter
 from pathlib import Path
 from shutil import which
 from typing import Annotated
 
+import tomllib
 import typer
 from rich.console import Console
 from rich.filesize import decimal as fmt_decimal

@@ -1,0 +1,36 @@
+name: inventory-rs
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inventory-rs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inventory-rs
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Build
+        run: cargo build --locked --verbose
+
+      - name: Run unit tests
+        run: cargo test --locked --verbose --lib --bins

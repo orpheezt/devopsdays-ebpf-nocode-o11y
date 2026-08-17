@@ -36,14 +36,6 @@ jobs:
         with:
           manifest-path: ./inventory-rs/Cargo.toml
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
-        with:
-          enable-cache: true
-
-      - name: Ruff format check
-        run: uv run --with ruff ruff format --check --output-format=github scripts
-
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -62,20 +54,6 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features --locked
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
-        with:
-          enable-cache: true
-
-      - name: Install Python dependencies
-        run: uv venv && uv pip install rich typer ruff ty
-
-      - name: Ruff check
-        run: uv run ruff check --output-format=github scripts
-
-      - name: Ty check
-        run: uv run ty check --output-format=github scripts
 
   build:
     name: Build

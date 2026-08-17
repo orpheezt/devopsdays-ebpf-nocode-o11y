@@ -1,0 +1,103 @@
+name: payment-go
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: payment-go-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payment-go
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: payment-go/go.mod
+          cache-dependency-path: payment-go/go.sum
+
+      - name: Gofmt check
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not formatted:"
+            gofmt -l .
+            exit 1
+          fi
+
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payment-go
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: payment-go/go.mod
+          cache-dependency-path: payment-go/go.sum
+
+      - name: Go vet
+        run: go vet ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payment-go
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: payment-go/go.mod
+          cache-dependency-path: payment-go/go.sum
+
+      - name: Build binary
+        run: CGO_ENABLED=0 go build -v -o /tmp/payment-go ./src
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payment-go
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: payment-go/go.mod
+          cache-dependency-path: payment-go/go.sum
+
+      - name: Install Goose CLI
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+      - name: Run unit tests
+        run: go test -v ./src/...
+
+      - name: Run integration tests (Testcontainers)
+        run: go test -v -timeout 180s ./tests/...

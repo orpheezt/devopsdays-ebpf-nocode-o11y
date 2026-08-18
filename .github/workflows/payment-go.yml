@@ -2,7 +2,14 @@ name: payment-go
 
 on:
   push:
+    paths:
+      - 'payment-go/**'
+      - '.github/workflows/payment-go.yml'
   pull_request:
+    paths:
+      - 'payment-go/**'
+      - '.github/workflows/payment-go.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

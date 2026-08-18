@@ -1,0 +1,45 @@
+name: shipping-quarkus
+
+on:
+  push:
+    paths:
+      - 'shipping-quarkus/**'
+      - '.github/workflows/shipping-quarkus.yml'
+  pull_request:
+    paths:
+      - 'shipping-quarkus/**'
+      - '.github/workflows/shipping-quarkus.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shipping-quarkus-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shipping-quarkus
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@v5.7.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+
+      - name: Build and Test with Gradle
+        run: ./gradlew build test

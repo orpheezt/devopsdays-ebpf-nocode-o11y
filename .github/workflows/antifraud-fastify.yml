@@ -2,7 +2,14 @@ name: antifraud-fastify
 
 on:
   push:
+    paths:
+      - 'antifraud-fastify/**'
+      - '.github/workflows/antifraud-fastify.yml'
   pull_request:
+    paths:
+      - 'antifraud-fastify/**'
+      - '.github/workflows/antifraud-fastify.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

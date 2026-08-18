@@ -2,7 +2,14 @@ name: gateway-py
 
 on:
   push:
+    paths:
+      - 'gateway-py/**'
+      - '.github/workflows/gateway-py.yml'
   pull_request:
+    paths:
+      - 'gateway-py/**'
+      - '.github/workflows/gateway-py.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

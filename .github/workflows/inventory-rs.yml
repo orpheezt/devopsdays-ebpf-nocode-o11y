@@ -2,7 +2,14 @@ name: inventory-rs
 
 on:
   push:
+    paths:
+      - 'inventory-rs/**'
+      - '.github/workflows/inventory-rs.yml'
   pull_request:
+    paths:
+      - 'inventory-rs/**'
+      - '.github/workflows/inventory-rs.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

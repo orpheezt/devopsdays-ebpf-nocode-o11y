@@ -8,9 +8,10 @@ repositories {
     mavenLocal()
 }
 
-val quarkusPlatformGroupId: String by project
-val quarkusPlatformArtifactId: String by project
-val quarkusPlatformVersion: String by project
+val quarkusPlatformGroupId: String = project.property("quarkusPlatformGroupId") as String
+val quarkusPlatformArtifactId: String = project.property("quarkusPlatformArtifactId") as String
+val quarkusPlatformVersion: String = project.property("quarkusPlatformVersion") as String
+
 
 dependencies {
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
@@ -32,3 +33,8 @@ tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
     options.compilerArgs.add("-parameters")
 }
+
+tasks.withType<io.quarkus.gradle.tasks.QuarkusDev> {
+    setJvmArgs(listOf("--enable-native-access=ALL-UNNAMED"))
+}
+

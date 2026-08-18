@@ -27,7 +27,7 @@ import (
 
 func init() {
 	gin.SetMode(gin.TestMode)
-	_ = os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
+	_ = os.Setenv("TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED", "true")
 }
 
 func startPostgresContainer(ctx context.Context, t *testing.T) (*tcpostgres.PostgresContainer, string) {

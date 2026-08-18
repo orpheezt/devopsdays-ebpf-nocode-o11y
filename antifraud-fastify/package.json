@@ -1,0 +1,30 @@
+{
+  "name": "antifraud-fastify",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "TESTCONTAINERS_RYUK_PRIVILEGED=true bun test",
+    "lint": "biome check src tests",
+    "lint:fix": "biome check --write src tests",
+    "format": "biome format --write src tests",
+    "format:check": "biome format src tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.9",
+    "@testcontainers/redis": "^12.1.0",
+    "@types/bun": "latest",
+    "@types/node": "^26.2.0",
+    "testcontainers": "^12.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "fastify": "^5.12.0",
+    "ioredis": "^6.0.0"
+  }
+}

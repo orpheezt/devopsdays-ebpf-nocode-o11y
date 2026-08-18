@@ -23,6 +23,7 @@ func TestLoadDefaults(t *testing.T) {
 	os.Unsetenv("DB_SSLMODE")
 	os.Unsetenv("ANTIFRAUD_SERVICE_URL")
 	os.Unsetenv("ANTIFRAUD_TIMEOUT_MS")
+	os.Unsetenv("ANTIFRAUD_SECRET_KEY")
 
 	cfg := config.Load()
 	assert.Equal(t, "8081", cfg.Port)
@@ -30,6 +31,7 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Contains(t, cfg.DBDSN, "dbname=payment_db")
 	assert.Equal(t, "http://antifraud-fastify:8083", cfg.AntiFraudServiceURL)
 	assert.Equal(t, 2*time.Second, cfg.AntiFraudTimeout)
+	assert.Equal(t, "antifraud-super-secret-key-2026", cfg.AntiFraudSecretKey)
 }
 
 func TestLoadCustomEnv(t *testing.T) {
@@ -38,6 +40,7 @@ func TestLoadCustomEnv(t *testing.T) {
 	t.Setenv("DB_DSN", "postgres://custom_user:custom_pass@custom_host:5433/custom_db?sslmode=require")
 	t.Setenv("ANTIFRAUD_SERVICE_URL", "http://custom-antifraud:8080")
 	t.Setenv("ANTIFRAUD_TIMEOUT_MS", "3500")
+	t.Setenv("ANTIFRAUD_SECRET_KEY", "custom-secret-key-999")
 
 	cfg := config.Load()
 	assert.Equal(t, "9090", cfg.Port)
@@ -45,4 +48,5 @@ func TestLoadCustomEnv(t *testing.T) {
 	assert.Equal(t, "postgres://custom_user:custom_pass@custom_host:5433/custom_db?sslmode=require", cfg.DBDSN)
 	assert.Equal(t, "http://custom-antifraud:8080", cfg.AntiFraudServiceURL)
 	assert.Equal(t, 3500*time.Millisecond, cfg.AntiFraudTimeout)
+	assert.Equal(t, "custom-secret-key-999", cfg.AntiFraudSecretKey)
 }

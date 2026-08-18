@@ -48,6 +48,7 @@ func main() {
 	paymentService := payments.NewPaymentService(database, payments.ServiceConfig{
 		AntiFraudServiceURL: cfg.AntiFraudServiceURL,
 		AntiFraudTimeout:    cfg.AntiFraudTimeout,
+		AntiFraudSecretKey:  cfg.AntiFraudSecretKey,
 	}, nil)
 	paymentHandler := payments.NewHandler(paymentService)
 

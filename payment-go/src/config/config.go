@@ -13,6 +13,7 @@ type Config struct {
 	DBDSN               string
 	AntiFraudServiceURL string
 	AntiFraudTimeout    time.Duration
+	AntiFraudSecretKey  string
 }
 
 func Load() *Config {
@@ -40,6 +41,7 @@ func Load() *Config {
 	}
 
 	antifraudURL := getEnv("ANTIFRAUD_SERVICE_URL", "http://antifraud-fastify:8083")
+	antifraudSecretKey := getEnv("ANTIFRAUD_SECRET_KEY", "antifraud-super-secret-key-2026")
 	timeoutMsStr := getEnv("ANTIFRAUD_TIMEOUT_MS", "2000")
 	timeoutMs, err := strconv.Atoi(timeoutMsStr)
 	if err != nil || timeoutMs <= 0 {
@@ -52,6 +54,7 @@ func Load() *Config {
 		DBDSN:               dsn,
 		AntiFraudServiceURL: antifraudURL,
 		AntiFraudTimeout:    time.Duration(timeoutMs) * time.Millisecond,
+		AntiFraudSecretKey:  antifraudSecretKey,
 	}
 }
 

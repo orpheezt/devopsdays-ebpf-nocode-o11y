@@ -2,11 +2,15 @@ package payments
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,6 +27,7 @@ type Service interface {
 type ServiceConfig struct {
 	AntiFraudServiceURL string
 	AntiFraudTimeout    time.Duration
+	AntiFraudSecretKey  string
 }
 
 type PaymentService struct {
@@ -61,7 +66,11 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req PaymentRequest)
 	}
 	paymentIDStr := paymentUUID.String()
 
-	antifraudURL := fmt.Sprintf("%s/check-fraud", strings.TrimRight(s.cfg.AntiFraudServiceURL, "/"))
+	antifraudURL := fmt.Sprintf("%s/check-fraud?customer_id=%s&amount=%.2f",
+		strings.TrimRight(s.cfg.AntiFraudServiceURL, "/"),
+		url.QueryEscape(req.CustomerID),
+		req.Amount,
+	)
 
 	reqCtx, cancel := context.WithTimeout(ctx, s.cfg.AntiFraudTimeout)
 	defer cancel()
@@ -98,6 +107,28 @@ func (s *PaymentService) ProcessPayment(ctx context.Context, req PaymentRequest)
 	if err := json.NewDecoder(resp.Body).Decode(&fraudAssessment); err != nil {
 		slog.Error("failed to decode antifraud response", "error", err)
 		return nil, &DownstreamError{Service: "antifraud", Message: fmt.Sprintf("invalid json response: %v", err)}
+	}
+
+	if s.cfg.AntiFraudSecretKey != "" && fraudAssessment.Signature != "" {
+		canonical := fmt.Sprintf("%s|%.2f|%.2f|%s|%s",
+			req.CustomerID,
+			req.Amount,
+			fraudAssessment.RiskScore,
+			fraudAssessment.Status,
+			fraudAssessment.EvaluatedAt,
+		)
+		mac := hmac.New(sha256.New, []byte(s.cfg.AntiFraudSecretKey))
+		mac.Write([]byte(canonical))
+		expectedSig := fmt.Sprintf("sha256:%s", hex.EncodeToString(mac.Sum(nil)))
+
+		if !hmac.Equal([]byte(fraudAssessment.Signature), []byte(expectedSig)) {
+			slog.Error("antifraud HMAC signature mismatch (possible tampering)",
+				"order_id", req.OrderID,
+				"received_sig", fraudAssessment.Signature,
+				"expected_sig", expectedSig,
+			)
+			return nil, &DownstreamError{Service: "antifraud", Message: "fraud assessment signature verification failed"}
+		}
 	}
 
 	status := "APPROVED"

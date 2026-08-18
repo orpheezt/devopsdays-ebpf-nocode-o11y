@@ -3,11 +3,16 @@ package tests
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -52,8 +57,8 @@ func startPostgresContainer(ctx context.Context, t *testing.T) (*tcpostgres.Post
 
 func runGooseMigrations(ctx context.Context, t *testing.T, connStr string) {
 	cmd := exec.CommandContext(ctx, "goose", "-dir", "../migrations", "postgres", connStr, "up")
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "goose migration failed: %s", string(out))
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "failed to run migrations: %s", string(output))
 }
 
 func TestEndToEndWithPostgresTestcontainer(t *testing.T) {
@@ -69,15 +74,34 @@ func TestEndToEndWithPostgresTestcontainer(t *testing.T) {
 	gormDB, err := db.InitDB(connStr)
 	require.NoError(t, err)
 
+	secretKey := "integration-test-secret-key"
 	antifraudRiskScore := 0.02
+
 	mockAntiFraud := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/check-fraud", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
+
+		customerID := r.URL.Query().Get("customer_id")
+		amountStr := r.URL.Query().Get("amount")
+		amount, _ := strconv.ParseFloat(amountStr, 64)
+		evaluatedAt := "2026-08-17T20:00:00.000Z"
+		status := "LOW_RISK"
+		if antifraudRiskScore >= 0.85 {
+			status = "HIGH_RISK"
+		}
+
+		canonical := fmt.Sprintf("%s|%.2f|%.2f|%s|%s", customerID, amount, antifraudRiskScore, status, evaluatedAt)
+		mac := hmac.New(sha256.New, []byte(secretKey))
+		mac.Write([]byte(canonical))
+		sig := fmt.Sprintf("sha256:%s", hex.EncodeToString(mac.Sum(nil)))
+
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Antifraud-Signature", sig)
 		_ = json.NewEncoder(w).Encode(payments.FraudAssessment{
-			RiskScore: antifraudRiskScore,
-			Status:    "LOW_RISK",
-			Engine:    "fastify-node",
+			RiskScore:   antifraudRiskScore,
+			Status:      status,
+			Signature:   sig,
+			EvaluatedAt: evaluatedAt,
 		})
 	}))
 	defer mockAntiFraud.Close()
@@ -85,6 +109,7 @@ func TestEndToEndWithPostgresTestcontainer(t *testing.T) {
 	paymentService := payments.NewPaymentService(gormDB, payments.ServiceConfig{
 		AntiFraudServiceURL: mockAntiFraud.URL,
 		AntiFraudTimeout:    2 * time.Second,
+		AntiFraudSecretKey:  secretKey,
 	}, mockAntiFraud.Client())
 	paymentHandler := payments.NewHandler(paymentService)
 
@@ -141,7 +166,7 @@ func TestEndToEndWithPostgresTestcontainer(t *testing.T) {
 		assert.Equal(t, 43.50, res.AmountProcessed)
 		assert.Equal(t, 0.02, res.FraudAssessment.RiskScore)
 		assert.Equal(t, "LOW_RISK", res.FraudAssessment.Status)
-		assert.Equal(t, "fastify-node", res.FraudAssessment.Engine)
+		assert.NotEmpty(t, res.FraudAssessment.Signature)
 
 		var saved models.Payment
 		err = gormDB.Where("payment_id = ?", res.PaymentID).First(&saved).Error
@@ -150,7 +175,6 @@ func TestEndToEndWithPostgresTestcontainer(t *testing.T) {
 		assert.Equal(t, 43.50, saved.Amount)
 		assert.Equal(t, "APPROVED", saved.Status)
 		assert.Equal(t, 0.02, saved.RiskScore)
-		assert.Equal(t, "fastify-node", saved.AntiFraudEngine)
 		assert.False(t, saved.CreatedAt.IsZero())
 	})
 

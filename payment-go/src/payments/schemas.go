@@ -7,9 +7,12 @@ type PaymentRequest struct {
 }
 
 type FraudAssessment struct {
-	RiskScore float64 `json:"risk_score"`
-	Status    string  `json:"status"`
-	Engine    string  `json:"engine"`
+	RiskScore   float64  `json:"risk_score"`
+	Status      string   `json:"status"`
+	Engine      string   `json:"engine,omitempty"`
+	Signature   string   `json:"signature,omitempty"`
+	EvaluatedAt string   `json:"evaluated_at,omitempty"`
+	Factors     []string `json:"factors,omitempty"`
 }
 
 type PaymentResponse struct {

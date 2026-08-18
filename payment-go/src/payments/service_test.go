@@ -2,7 +2,11 @@ package payments_test
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,17 +32,25 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	return gormDB
 }
 
+func computeSignature(secret, customerID string, amount, riskScore float64, status, evaluatedAt string) string {
+	canonical := fmt.Sprintf("%s|%.2f|%.2f|%s|%s", customerID, amount, riskScore, status, evaluatedAt)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(canonical))
+	return fmt.Sprintf("sha256:%s", hex.EncodeToString(mac.Sum(nil)))
+}
+
 func TestProcessPayment_Approved(t *testing.T) {
 	db := setupTestDB(t)
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/check-fraud", r.URL.Path)
+		assert.Equal(t, "CUST-BOGOTA-2026", r.URL.Query().Get("customer_id"))
+		assert.Equal(t, "43.50", r.URL.Query().Get("amount"))
 		assert.Equal(t, http.MethodGet, r.Method)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(payments.FraudAssessment{
 			RiskScore: 0.02,
 			Status:    "LOW_RISK",
-			Engine:    "fastify-node",
 		})
 	}))
 	defer mockServer.Close()
@@ -64,7 +76,6 @@ func TestProcessPayment_Approved(t *testing.T) {
 	assert.Equal(t, 43.50, resp.AmountProcessed)
 	assert.Equal(t, 0.02, resp.FraudAssessment.RiskScore)
 	assert.Equal(t, "LOW_RISK", resp.FraudAssessment.Status)
-	assert.Equal(t, "fastify-node", resp.FraudAssessment.Engine)
 
 	var saved models.Payment
 	err = db.Where("payment_id = ?", resp.PaymentID).First(&saved).Error
@@ -82,7 +93,6 @@ func TestProcessPayment_Declined(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(payments.FraudAssessment{
 			RiskScore: 0.95,
 			Status:    "HIGH_RISK",
-			Engine:    "fastify-node",
 		})
 	}))
 	defer mockServer.Close()
@@ -107,6 +117,86 @@ func TestProcessPayment_Declined(t *testing.T) {
 	err = db.Where("payment_id = ?", resp.PaymentID).First(&saved).Error
 	require.NoError(t, err)
 	assert.Equal(t, "DECLINED", saved.Status)
+}
+
+func TestProcessPayment_HMACSuccess(t *testing.T) {
+	db := setupTestDB(t)
+	secret := "test-secret-key-12345"
+	evaluatedAt := "2026-08-17T20:00:00.000Z"
+	customerID := "CUST-HMAC-VALID"
+	amount := 88.00
+	riskScore := 0.02
+	status := "LOW_RISK"
+
+	sig := computeSignature(secret, customerID, amount, riskScore, status, evaluatedAt)
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payments.FraudAssessment{
+			RiskScore:   riskScore,
+			Status:      status,
+			Signature:   sig,
+			EvaluatedAt: evaluatedAt,
+		})
+	}))
+	defer mockServer.Close()
+
+	svc := payments.NewPaymentService(db, payments.ServiceConfig{
+		AntiFraudServiceURL: mockServer.URL,
+		AntiFraudTimeout:    2 * time.Second,
+		AntiFraudSecretKey:  secret,
+	}, mockServer.Client())
+
+	req := payments.PaymentRequest{
+		OrderID:    "0191234a-5b6c-7123-8000-000000000010",
+		CustomerID: customerID,
+		Amount:     amount,
+	}
+
+	resp, err := svc.ProcessPayment(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "APPROVED", resp.Status)
+	assert.Equal(t, sig, resp.FraudAssessment.Signature)
+}
+
+func TestProcessPayment_HMACTamperedFailure(t *testing.T) {
+	db := setupTestDB(t)
+	secret := "test-secret-key-12345"
+	evaluatedAt := "2026-08-17T20:00:00.000Z"
+	customerID := "CUST-HMAC-TAMPERED"
+	amount := 88.00
+
+	tamperedSig := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payments.FraudAssessment{
+			RiskScore:   0.02,
+			Status:      "LOW_RISK",
+			Signature:   tamperedSig,
+			EvaluatedAt: evaluatedAt,
+		})
+	}))
+	defer mockServer.Close()
+
+	svc := payments.NewPaymentService(db, payments.ServiceConfig{
+		AntiFraudServiceURL: mockServer.URL,
+		AntiFraudTimeout:    2 * time.Second,
+		AntiFraudSecretKey:  secret,
+	}, mockServer.Client())
+
+	req := payments.PaymentRequest{
+		OrderID:    "0191234a-5b6c-7123-8000-000000000011",
+		CustomerID: customerID,
+		Amount:     amount,
+	}
+
+	_, err := svc.ProcessPayment(context.Background(), req)
+	assert.Error(t, err)
+	var downstreamErr *payments.DownstreamError
+	assert.ErrorAs(t, err, &downstreamErr)
+	assert.Equal(t, "antifraud", downstreamErr.Service)
+	assert.Contains(t, downstreamErr.Message, "signature verification failed")
 }
 
 func TestProcessPayment_InvalidOrderID(t *testing.T) {

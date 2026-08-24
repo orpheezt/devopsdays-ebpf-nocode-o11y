@@ -25,7 +25,7 @@ class PaymentRequest(BaseModel):
 
     order_id: UUID
     customer_id: str
-    amount: Decimal = Field(..., gt=0)
+    amount: float = Field(..., gt=0)
 
 
 class InventoryReserveItem(BaseModel):

@@ -43,7 +43,7 @@ def get_rust_version() -> str:
         for line in dockerfile_path.read_text().splitlines():
             if line.startswith("ARG RUST_VERSION="):
                 return line.split("=")[1].strip()
-    return "1.97.1"
+    return "1.98.0"
 
 
 TAG = get_cargo_version()

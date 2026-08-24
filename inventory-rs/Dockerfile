@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG RUST_VERSION=1.97.1
+ARG RUST_VERSION=1.98.0
 ARG APP_NAME=inventory-rs
 ARG ALPINE_VERSION=3.24
 ARG PORT=8082

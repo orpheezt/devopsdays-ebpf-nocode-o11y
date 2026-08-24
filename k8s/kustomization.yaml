@@ -4,6 +4,9 @@ namespace: devopsdays
 
 resources:
   - namespace.yaml
+  - observability/tempo.yaml
+  - observability/prometheus.yaml
+  - observability/grafana.yaml
   - postgres.yaml
   - valkey.yaml
   - shipping-quarkus.yaml
@@ -11,6 +14,7 @@ resources:
   - payment-go.yaml
   - inventory-rs.yaml
   - gateway-py.yaml
+  - beyla.yaml
 
 secretGenerator:
   - name: postgres-secrets

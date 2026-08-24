@@ -10,7 +10,7 @@ RUN --mount=type=bind,source=build.gradle.kts,target=build.gradle.kts \
     --mount=type=bind,source=gradlew,target=gradlew \
     --mount=type=bind,source=src,target=src \
     --mount=type=cache,target=/root/.gradle \
-    sh ./gradlew build -Dquarkus.native.enabled=true --no-daemon
+    sh ./gradlew quarkusBuild -Dquarkus.package.jar.enabled=false -Dquarkus.native.enabled=true --no-daemon
 
 FROM docker.io/bellsoft/alpaquita-linux-base:stream-glibc AS runtime
 

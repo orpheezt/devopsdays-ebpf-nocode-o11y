@@ -28,6 +28,67 @@ spec:
               cpu: 200m
               memory: 128Mi
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-go-seeds-sql
+  namespace: devopsdays
+data:
+  seed.sql: |
+    INSERT INTO "payments" ("payment_id", "order_id", "amount", "status", "created_at")
+    VALUES
+        ('0191234a-5b6c-7123-9000-000000000010', '0191234a-5b6c-7123-9000-000000000001', 50.00, 'APPROVED', NOW() - INTERVAL '1 day'),
+        ('0191234a-5b6c-7123-9000-000000000011', '0191234a-5b6c-7123-9000-000000000002', 34.00, 'APPROVED', NOW() - INTERVAL '12 hours'),
+        ('0191234a-5b6c-7123-9000-000000000012', '0191234a-5b6c-7123-9000-000000000003', 120.50, 'APPROVED', NOW() - INTERVAL '2 hours')
+    ON CONFLICT ("payment_id") DO NOTHING;
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payment-go-seeds
+  namespace: devopsdays
+  labels:
+    app: payment-go-seeds
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: payment-go-seeds
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seeder
+          image: docker.io/library/postgres:18.6-trixie
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGPASSWORD
+              value: "postgres"
+          command:
+            - psql
+            - -h
+            - postgres
+            - -U
+            - postgres
+            - -d
+            - payment_db
+            - -f
+            - /seeds/seed.sql
+          volumeMounts:
+            - name: seed-volume
+              mountPath: /seeds
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: seed-volume
+          configMap:
+            name: payment-go-seeds-sql
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -162,7 +162,7 @@ class CheckoutService:
                         reason = (
                             data.get("error") or data.get("detail") or str(status_exc)
                         )
-                except (ValueError, KeyError, TypeError, httpx2.DecodingError):
+                except ValueError, KeyError, TypeError, httpx2.DecodingError:
                     if status_exc.response.text:
                         reason = status_exc.response.text
                 return DownstreamStatusError(

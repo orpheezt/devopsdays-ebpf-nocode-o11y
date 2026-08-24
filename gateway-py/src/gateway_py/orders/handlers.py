@@ -31,5 +31,7 @@ async def on_downstream_error(request: Request, exc: DownstreamError) -> JSONRes
         case _:
             return JSONResponse(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                content={"detail": "The request could not be completed. Please try again."},
+                content={
+                    "detail": "The request could not be completed. Please try again."
+                },
             )

@@ -1,38 +1,22 @@
 # syntax=docker/dockerfile:1
 
-ARG GO_VERSION=1.26.5
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine3.24 AS build
+FROM docker.io/bellsoft/alpaquita-linux-base:stream-glibc AS build
 WORKDIR /src
 
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=bind,source=go.sum,target=go.sum \
-    --mount=type=bind,source=go.mod,target=go.mod \
-    go mod download -x
+RUN apk add --no-cache go
 
-ARG TARGETARCH
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=bind,target=. \
-    CGO_ENABLED=0 GOARCH=$TARGETARCH go build -o /bin/server ./src
+COPY . .
+RUN CGO_ENABLED=0 go build -o /bin/server ./src
 
-FROM alpine:3.24.1 AS final
+FROM docker.io/bellsoft/alpaquita-linux-base:stream-glibc AS final
 
-RUN --mount=type=cache,target=/var/cache/apk \
-    apk --update add \
-    ca-certificates \
-    tzdata \
-    && \
-    update-ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 
 ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
+RUN adduser -u ${UID} -D -s /sbin/nologin appuser
 USER appuser
 
 COPY --from=build /bin/server /bin/

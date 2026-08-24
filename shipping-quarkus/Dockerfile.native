@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+FROM docker.io/bellsoft/liberica-native-image-kit-container:jdk-25-nik-25-stream-glibc AS builder
+
+WORKDIR /build
+
+RUN --mount=type=bind,source=build.gradle.kts,target=build.gradle.kts \
+    --mount=type=bind,source=settings.gradle.kts,target=settings.gradle.kts \
+    --mount=type=bind,source=gradle.properties,target=gradle.properties \
+    --mount=type=bind,source=gradle,target=gradle \
+    --mount=type=bind,source=gradlew,target=gradlew \
+    --mount=type=bind,source=src,target=src \
+    --mount=type=cache,target=/root/.gradle \
+    sh ./gradlew build -Dquarkus.native.enabled=true --no-daemon
+
+FROM docker.io/bellsoft/alpaquita-linux-base:stream-glibc AS runtime
+
+RUN apk add --no-cache ca-certificates tzdata
+
+ARG UID=10001
+ARG GID=10001
+RUN addgroup -g ${GID} appgroup && \
+    adduser -u ${UID} -G appgroup -D -s /sbin/nologin -h /app appuser
+
+WORKDIR /app
+
+COPY --from=builder --chown=appuser:appgroup /build/build/*-runner /app/application
+
+USER appuser
+
+EXPOSE 8084
+
+ENV PORT=8084
+
+ENTRYPOINT ["/app/application", "-Dquarkus.http.host=0.0.0.0", "-Dquarkus.http.port=8084"]

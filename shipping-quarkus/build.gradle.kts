@@ -8,20 +8,21 @@ repositories {
     mavenLocal()
 }
 
-val quarkusPlatformGroupId: String = project.property("quarkusPlatformGroupId") as String
-val quarkusPlatformArtifactId: String = project.property("quarkusPlatformArtifactId") as String
-val quarkusPlatformVersion: String = project.property("quarkusPlatformVersion") as String
-
+val quarkusPlatformGroupId = project.findProperty("quarkusPlatformGroupId") as String? ?: "io.quarkus.platform"
+val quarkusPlatformArtifactId = project.findProperty("quarkusPlatformArtifactId") as String? ?: "quarkus-bom"
+val quarkusPlatformVersion = project.findProperty("quarkusPlatformVersion") as String? ?: "3.38.3"
 
 dependencies {
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
+    implementation("io.quarkus:quarkus-rest-jackson")
+    implementation("io.quarkus:quarkus-smallrye-health")
     implementation("io.quarkus:quarkus-arc")
     implementation("io.quarkus:quarkus-rest")
-    testImplementation("io.quarkus:quarkus-junit")
+    testImplementation("io.quarkus:quarkus-junit5")
     testImplementation("io.rest-assured:rest-assured")
 }
 
-group = "org.acme"
+group = "org.devopsdays.bogota"
 version = "1.0.0-SNAPSHOT"
 
 java {
@@ -33,8 +34,3 @@ tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
     options.compilerArgs.add("-parameters")
 }
-
-tasks.withType<io.quarkus.gradle.tasks.QuarkusDev> {
-    setJvmArgs(listOf("--enable-native-access=ALL-UNNAMED"))
-}
-

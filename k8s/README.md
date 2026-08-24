@@ -1,6 +1,6 @@
 # Kubernetes Microservices Architecture (DevOpsDays Bogotá 2026)
 
-Polyglot microservices deployment for **eBPF No-Code Observability**, configured for Minikube and standard Kubernetes clusters.
+Production-hardened polyglot microservices deployment for **eBPF No-Code Observability**, featuring **ArgoCD Sync Waves & Hooks** lifecycle orchestration, state persistence, secret management, and Kubernetes best practices.
 
 ---
 
@@ -34,18 +34,56 @@ Polyglot microservices deployment for **eBPF No-Code Observability**, configured
 
 ---
 
-## 📁 Manifest Structure (One YAML per Microservice / Component)
+## 🌊 ArgoCD Sync Waves & Deployment Lifecycle
 
-| Manifest | Kind(s) | Description |
-| :--- | :--- | :--- |
-| [`postgres.yaml`](./postgres.yaml) | ConfigMap, Deployment, Service | Single PostgreSQL 18.6-trixie instance initialized with `payment_db` and `inventory_db`. |
-| [`valkey.yaml`](./valkey.yaml) | Deployment, Service | Valkey 9.1.1-trixie in-memory store for rate limiting, cache, and velocity tracking. |
-| [`shipping-quarkus.yaml`](./shipping-quarkus.yaml) | Deployment, Service | Standalone logistics rate calculator (`:8084`) on BellSoft Liberica Hardened JRE 25. |
-| [`antifraud-fastify.yaml`](./antifraud-fastify.yaml) | Deployment, Service | Real-time fraud detection (`:8083`) on official Bun 1.4.0 Distroless. |
-| [`payment-go.yaml`](./payment-go.yaml) | Job (migrations), ConfigMap + Job (seeds), Deployment, Service | Goose migration Job + Mock payment seeder Job + Payment processing service (`:8081`). |
-| [`inventory-rs.yaml`](./inventory-rs.yaml) | Job (migrations), ConfigMap + Job (seeds), Deployment, Service | Toasty migration Job + Product catalog seeder Job + Inventory service (`:8082`). |
-| [`gateway-py.yaml`](./gateway-py.yaml) | Deployment, Service | Ingress API gateway (`:8000`) on BellSoft Alpaquita base. |
-| [`kustomization.yaml`](./kustomization.yaml) | Kustomization | Bundles all resources under namespace `devopsdays`. |
+The deployment is ordered into deterministic phases using `argocd.argoproj.io/sync-wave` and `argocd.argoproj.io/hook`:
+
+```
+Wave -1 (Namespace)
+  └── Namespace: devopsdays
+
+Wave 0 (Secrets & Data Tier)
+  ├── secretGenerator (postgres-secrets, antifraud-secrets)
+  ├── StatefulSet: postgres (10Gi PVC storage) + ConfigMap: postgres-init-db
+  ├── Deployment: valkey
+  └── ConfigMaps: payment-go-seeds-sql, inventory-rs-seeds-sql
+
+Wave 1 (Schema Migrations - Hook: Sync)
+  ├── Job: payment-go-migrations (Goose)
+  └── Job: inventory-rs-migrations (Toasty)
+
+Wave 2 (Database Seeding - Hook: Sync)
+  ├── Job: payment-go-seeds
+  └── Job: inventory-rs-seeds
+
+Wave 3 (Core Microservices)
+  ├── Deployment: shipping-quarkus (:8084)
+  ├── Deployment: antifraud-fastify (:8083)
+  ├── Deployment: payment-go (:8081)
+  └── Deployment: inventory-rs (:8082)
+
+Wave 4 (API Gateway)
+  └── Deployment: gateway-py (:8000)
+```
+
+> **Dual Compatibility**: In addition to ArgoCD Sync Waves, all Jobs specify `ttlSecondsAfterFinished: 120` and `initContainers` waiting for PostgreSQL, so standard `kubectl apply -k k8s/` works reliably in local Minikube environments.
+
+---
+
+## 📁 Manifest Structure
+
+| Manifest | Kind(s) | ArgoCD Wave | Description |
+| :--- | :--- | :--- | :--- |
+| [`namespace.yaml`](./namespace.yaml) | Namespace | Wave -1 | Dedicated `devopsdays` namespace with standard labels. |
+| [`kustomization.yaml`](./kustomization.yaml) | Kustomization | Wave 0 | Bundles all resources and generates `postgres-secrets` and `antifraud-secrets`. |
+| [`postgres.yaml`](./postgres.yaml) | ConfigMap, StatefulSet, Service | Wave 0 | PostgreSQL 18.6-trixie `StatefulSet` with 10Gi PersistentVolumeClaim and startup probes. |
+| [`valkey.yaml`](./valkey.yaml) | Deployment, Service | Wave 0 | Valkey 9.1.1-trixie in-memory cache/store with startup probes. |
+| [`payment-go.yaml`](./payment-go.yaml) | Job (migrations), Job (seeds), ConfigMap, Deployment, Service | Waves 0, 1, 2, 3 | Goose migration Job (Wave 1) + Seed Job (Wave 2) + Payment service (Wave 3). |
+| [`inventory-rs.yaml`](./inventory-rs.yaml) | Job (migrations), Job (seeds), ConfigMap, Deployment, Service | Waves 0, 1, 2, 3 | Toasty migration Job (Wave 1) + Seed Job (Wave 2) + Inventory service (Wave 3). |
+| [`shipping-quarkus.yaml`](./shipping-quarkus.yaml) | Deployment, Service | Wave 3 | Standalone logistics rate calculator (`:8084`) on BellSoft Liberica Hardened JRE 25. |
+| [`antifraud-fastify.yaml`](./antifraud-fastify.yaml) | Deployment, Service | Wave 3 | Real-time fraud detection (`:8083`) on official Bun 1.4.0 Distroless. |
+| [`gateway-py.yaml`](./gateway-py.yaml) | Deployment, Service | Wave 4 | Ingress API gateway (`:8000`) on BellSoft Alpaquita base. |
+| [`argocd-application.yaml`](./argocd-application.yaml) | Application | N/A | Turnkey ArgoCD Application custom resource for GitOps. |
 
 ---
 
@@ -78,16 +116,22 @@ podman build -t localhost/api-server:latest -f gateway-py/Dockerfile gateway-py
 podman save localhost/api-server:latest | minikube image load -
 ```
 
-### 2. Deploy All Resources
+### 2. Deploy via Kustomize (Minikube / Local)
 
 ```bash
 kubectl apply -k k8s/
 ```
 
-### 3. Verify Pods & Rollout Status
+### 3. Or Deploy via ArgoCD (GitOps)
 
 ```bash
-kubectl get pods,svc,jobs -n devopsdays
+kubectl apply -f k8s/argocd-application.yaml
+```
+
+### 4. Verify Pods & Rollout Status
+
+```bash
+kubectl get pods,svc,jobs,pvc,statefulset -n devopsdays
 ```
 
 ---

@@ -2,29 +2,46 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: postgres-init-db
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    app.kubernetes.io/name: postgres-init-db
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
 data:
   01-create-databases.sql: |
     CREATE DATABASE payment_db;
     CREATE DATABASE inventory_db;
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   labels:
-    app: postgres
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
 spec:
+  serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
-      app: postgres
+      app.kubernetes.io/name: postgres
   template:
     metadata:
       labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/instance: postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: devopsdays-ecommerce
         app: postgres
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
         - name: postgres
           image: docker.io/library/postgres:18.6-trixie
@@ -33,12 +50,32 @@ spec:
             - containerPort: 5432
               name: postgres
           env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_USER
-              value: postgres
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
-              value: postgres
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
-              value: postgres
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_DB
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
           livenessProbe:
             exec:
               command:
@@ -63,19 +100,40 @@ spec:
               cpu: 500m
               memory: 512Mi
           volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
       volumes:
         - name: init-scripts
           configMap:
             name: postgres-init-db
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+        labels:
+          app.kubernetes.io/name: postgres
+          app.kubernetes.io/part-of: devopsdays-ecommerce
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
     app: postgres
 spec:
   ports:
@@ -83,4 +141,4 @@ spec:
       targetPort: 5432
       name: postgres
   selector:
-    app: postgres
+    app.kubernetes.io/name: postgres

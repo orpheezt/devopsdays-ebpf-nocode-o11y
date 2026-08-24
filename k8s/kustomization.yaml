@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: devopsdays
 
 resources:
+  - namespace.yaml
   - postgres.yaml
   - valkey.yaml
   - shipping-quarkus.yaml
@@ -10,3 +11,23 @@ resources:
   - payment-go.yaml
   - inventory-rs.yaml
   - gateway-py.yaml
+
+secretGenerator:
+  - name: postgres-secrets
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    literals:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+      - PAYMENT_DB_NAME=payment_db
+      - INVENTORY_DB_NAME=inventory_db
+      - PAYMENT_DB_URL=postgres://postgres:postgres@postgres:5432/payment_db?sslmode=disable
+      - INVENTORY_DB_URL=postgres://postgres:postgres@postgres:5432/inventory_db?sslmode=disable
+  - name: antifraud-secrets
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    literals:
+      - ANTIFRAUD_SECRET_KEY=antifraud-super-secret-key-2026

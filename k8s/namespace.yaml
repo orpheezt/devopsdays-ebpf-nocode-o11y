@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/name: devopsdays
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize

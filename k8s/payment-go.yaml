@@ -2,23 +2,66 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: payment-go-migrations
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
   labels:
+    app.kubernetes.io/name: payment-go-migrations
+    app.kubernetes.io/instance: payment-go-migrations
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
     app: payment-go-migrations
 spec:
+  ttlSecondsAfterFinished: 120
   backoffLimit: 10
   template:
     metadata:
       labels:
+        app.kubernetes.io/name: payment-go-migrations
+        app.kubernetes.io/component: migration
+        app.kubernetes.io/part-of: devopsdays-ecommerce
         app: payment-go-migrations
     spec:
       restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: docker.io/library/postgres:18.6-trixie
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "until pg_isready -h postgres -p 5432 -U postgres; do echo 'Waiting for postgres...'; sleep 2; done;"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       containers:
         - name: migrations
           image: localhost/payment-go-migrations:latest
           imagePullPolicy: IfNotPresent
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: PAYMENT_DB_NAME
           args:
-            - "host=postgres port=5432 user=postgres password=postgres dbname=payment_db sslmode=disable"
+            - "host=postgres port=5432 user=$(DB_USER) password=$(DB_PASSWORD) dbname=$(DB_NAME) sslmode=disable"
             - "up"
           resources:
             requests:
@@ -32,7 +75,13 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: payment-go-seeds-sql
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    app.kubernetes.io/name: payment-go-seeds-sql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
 data:
   seed.sql: |
     INSERT INTO "payments" ("payment_id", "order_id", "amount", "status", "created_at")
@@ -46,32 +95,72 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: payment-go-seeds
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
   labels:
+    app.kubernetes.io/name: payment-go-seeds
+    app.kubernetes.io/instance: payment-go-seeds
+    app.kubernetes.io/component: seeder
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
     app: payment-go-seeds
 spec:
+  ttlSecondsAfterFinished: 120
   backoffLimit: 10
   template:
     metadata:
       labels:
+        app.kubernetes.io/name: payment-go-seeds
+        app.kubernetes.io/component: seeder
+        app.kubernetes.io/part-of: devopsdays-ecommerce
         app: payment-go-seeds
     spec:
       restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: docker.io/library/postgres:18.6-trixie
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "until pg_isready -h postgres -p 5432 -U postgres; do echo 'Waiting for postgres...'; sleep 2; done;"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       containers:
         - name: seeder
           image: docker.io/library/postgres:18.6-trixie
           imagePullPolicy: IfNotPresent
           env:
             - name: PGPASSWORD
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: PAYMENT_DB_NAME
           command:
             - psql
             - -h
             - postgres
             - -U
-            - postgres
+            - $(PGUSER)
             - -d
-            - payment_db
+            - $(PGDATABASE)
             - -f
             - /seeds/seed.sql
           volumeMounts:
@@ -93,19 +182,30 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: payment-go
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
   labels:
+    app.kubernetes.io/name: payment-go
+    app.kubernetes.io/instance: payment-go
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
     app: payment-go
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: payment-go
+      app.kubernetes.io/name: payment-go
   template:
     metadata:
       labels:
+        app.kubernetes.io/name: payment-go
+        app.kubernetes.io/instance: payment-go
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: devopsdays-ecommerce
         app: payment-go
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: payment-go
           image: localhost/payment-go:latest
@@ -123,17 +223,36 @@ spec:
             - name: DB_PORT
               value: "5432"
             - name: DB_USER
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
             - name: DB_PASSWORD
-              value: "postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
             - name: DB_NAME
-              value: "payment_db"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: PAYMENT_DB_NAME
             - name: DB_SSLMODE
               value: "disable"
             - name: ANTIFRAUD_SERVICE_URL
               value: "http://antifraud-fastify:8083"
             - name: ANTIFRAUD_SECRET_KEY
-              value: "antifraud-super-secret-key-2026"
+              valueFrom:
+                secretKeyRef:
+                  name: antifraud-secrets
+                  key: ANTIFRAUD_SECRET_KEY
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /livez
@@ -146,6 +265,10 @@ spec:
               port: 8081
             initialDelaySeconds: 3
             periodSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "5"]
           resources:
             requests:
               cpu: 50m
@@ -158,8 +281,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: payment-go
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
   labels:
+    app.kubernetes.io/name: payment-go
+    app.kubernetes.io/instance: payment-go
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
     app: payment-go
 spec:
   ports:
@@ -167,4 +296,4 @@ spec:
       targetPort: 8081
       name: http
   selector:
-    app: payment-go
+    app.kubernetes.io/name: payment-go

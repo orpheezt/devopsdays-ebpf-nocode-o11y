@@ -2,19 +2,29 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: valkey
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   labels:
-    app: valkey
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: valkey
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: valkey
+      app.kubernetes.io/name: valkey
   template:
     metadata:
       labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/instance: valkey
+        app.kubernetes.io/component: cache
+        app.kubernetes.io/part-of: devopsdays-ecommerce
         app: valkey
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: valkey
           image: docker.io/valkey/valkey:9.1.1-trixie
@@ -22,6 +32,14 @@ spec:
           ports:
             - containerPort: 6379
               name: valkey
+          startupProbe:
+            exec:
+              command:
+                - valkey-cli
+                - ping
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
           livenessProbe:
             exec:
               command:
@@ -48,8 +66,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: valkey
-  namespace: devopsdays
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: valkey
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: devopsdays-ecommerce
+    app.kubernetes.io/managed-by: kustomize
     app: valkey
 spec:
   ports:
@@ -57,4 +81,4 @@ spec:
       targetPort: 6379
       name: valkey
   selector:
-    app: valkey
+    app.kubernetes.io/name: valkey

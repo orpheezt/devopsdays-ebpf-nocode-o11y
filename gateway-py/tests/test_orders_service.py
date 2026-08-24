@@ -154,6 +154,36 @@ async def test_checkout_inventory_status_error(
     assert exc_info.value.upstream_status == 500
 
 
+@pytest.mark.anyio
+async def test_checkout_with_tracing_headers(
+    mock_settings: OrdersSettings, sample_checkout_request: CheckoutRequest
+) -> None:
+    mock_client = AsyncMock(spec=httpx2.AsyncClient)
+    pay_resp = MagicMock(spec=httpx2.Response)
+    pay_resp.raise_for_status.return_value = None
+    inv_resp = MagicMock(spec=httpx2.Response)
+    inv_resp.raise_for_status.return_value = None
+
+    mock_client.post.side_effect = [pay_resp, inv_resp]
+
+    service = CheckoutService(settings=mock_settings, client=mock_client)
+    headers = {
+        "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+        "x-request-id": "req-12345",
+        "unrelated-header": "ignore-me",
+    }
+    res = await service.checkout(sample_checkout_request, headers=headers)
+
+    assert res.customer_id == "cust_123"
+    assert mock_client.post.call_count == 2
+    # Verify tracing headers were passed downstream
+    for call in mock_client.post.call_args_list:
+        passed_headers = call.kwargs["headers"]
+        assert passed_headers["traceparent"] == headers["traceparent"]
+        assert passed_headers["x-request-id"] == "req-12345"
+        assert "unrelated-header" not in passed_headers
+
+
 def test_map_error_variants() -> None:
     req = httpx2.Request("POST", "http://example.com")
     resp = httpx2.Response(status_code=404, request=req)
@@ -174,6 +204,18 @@ def test_map_error_variants() -> None:
     assert isinstance(mapped_status, DownstreamStatusError)
     assert mapped_status.service == "inventory"
     assert mapped_status.upstream_status == 404
+
+    # HTTPStatusError with JSON error body
+    resp_with_json = httpx2.Response(
+        status_code=400, request=req, json={"error": "Insufficient stock"}
+    )
+    status_json_exc = httpx2.HTTPStatusError(
+        "400 Bad Request", request=req, response=resp_with_json
+    )
+    mapped_json = CheckoutService._map_error("inventory", status_json_exc)
+    assert isinstance(mapped_json, DownstreamStatusError)
+    assert mapped_json.reason == "Insufficient stock"
+    assert mapped_json.upstream_status == 400
 
     # RequestError -> DownstreamTransportError
     req_exc = httpx2.RequestError("connection failed", request=req)

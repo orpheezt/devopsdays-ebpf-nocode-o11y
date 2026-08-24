@@ -29,7 +29,6 @@ def test_settings_section_default() -> None:
 def test_health_settings_defaults() -> None:
     settings = HealthSettings()
     assert settings.enabled is True
-    assert settings.model_config.get("yaml_config_section") == "health"
     assert settings.model_config.get("env_prefix") == "HEALTH_"
 
 
@@ -37,9 +36,10 @@ def test_orders_settings_defaults() -> None:
     settings = OrdersSettings()
     assert settings.enabled is True
     assert settings.payment_url == "http://payment-go:8081"
-    assert settings.inventory_url == "http://inventory-rust:8082"
+    assert settings.inventory_url == "http://inventory-rs:8082"
     assert settings.downstream_timeout == 5.0
-    assert settings.model_config.get("yaml_config_section") == "orders"
+    assert settings.coupon_code == "DEVOPSDAYS"
+    assert str(settings.discount_rate) == "0.15"
     assert settings.model_config.get("env_prefix") == "ORDER_"
 
 

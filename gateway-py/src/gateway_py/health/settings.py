@@ -7,7 +7,6 @@ from ..config import SettingsSection
 
 class HealthSettings(SettingsSection):
     model_config = SettingsConfigDict(
-        yaml_config_section="health",
         env_prefix="HEALTH_",
     )
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 
 from .dependencies import CheckoutServiceDep
 from .schemas import CheckoutRequest, OrderResponse
@@ -10,5 +10,6 @@ router = APIRouter(tags=["orders"])
 async def checkout(
     order: CheckoutRequest,
     service: CheckoutServiceDep,
+    request: Request,
 ) -> OrderResponse:
-    return await service.checkout(order)
+    return await service.checkout(order, headers=request.headers)

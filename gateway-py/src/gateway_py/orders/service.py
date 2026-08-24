@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import Mapping
 from decimal import ROUND_HALF_UP, Decimal
 
 import httpx2
@@ -13,13 +14,13 @@ from .errors import (
 )
 from .schemas import (
     CheckoutRequest,
+    InventoryReserveItem,
+    InventoryReserveRequest,
     OrderResponse,
     OrderSummary,
+    PaymentRequest,
 )
 from .settings import OrdersSettings
-
-COUPON_CODE = "DEVOPSDAYS"
-DISCOUNT_RATE = Decimal("0.15")
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,11 @@ class CheckoutService:
         )
         subtotal = subtotal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-        discount = DISCOUNT_RATE if order.coupon_code == COUPON_CODE else Decimal(0)
+        discount = (
+            self._settings.discount_rate
+            if order.coupon_code == self._settings.coupon_code
+            else Decimal(0)
+        )
         total = (subtotal * (Decimal(1) - discount)).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -47,7 +52,11 @@ class CheckoutService:
             coupon_applied=order.coupon_code if discount else None,
         )
 
-    async def checkout(self, order: CheckoutRequest) -> OrderResponse:
+    async def checkout(
+        self,
+        order: CheckoutRequest,
+        headers: Mapping[str, str] | None = None,
+    ) -> OrderResponse:
         order_id = uuid.uuid7()
         summary = self.compute_summary(order)
         logger.info(
@@ -59,26 +68,46 @@ class CheckoutService:
             summary.total,
         )
 
+        payment_payload = PaymentRequest(
+            order_id=order_id,
+            customer_id=order.customer_id,
+            amount=summary.total,
+        ).model_dump(mode="json")
+
+        inventory_payload = InventoryReserveRequest(
+            order_id=order_id,
+            items=[
+                InventoryReserveItem(
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                )
+                for item in order.items
+            ],
+        ).model_dump(mode="json")
+
+        forward_headers: dict[str, str] = {}
+        if headers:
+            for key in (
+                "traceparent",
+                "tracestate",
+                "baggage",
+                "x-request-id",
+                "x-b3-traceid",
+                "x-b3-spanid",
+                "x-b3-sampled",
+            ):
+                if key in headers:
+                    forward_headers[key] = headers[key]
+
         pay_task = self._client.post(
             f"{self._settings.payment_url}/pay",
-            json={
-                "order_id": str(order_id),
-                "customer_id": order.customer_id,
-                "amount": float(summary.total),
-            },
+            json=payment_payload,
+            headers=forward_headers,
         )
         inv_task = self._client.post(
             f"{self._settings.inventory_url}/reserve",
-            json={
-                "order_id": str(order_id),
-                "items": [
-                    {
-                        "product_id": str(item.product_id),
-                        "quantity": item.quantity,
-                    }
-                    for item in order.items
-                ],
-            },
+            json=inventory_payload,
+            headers=forward_headers,
         )
 
         results = await asyncio.gather(pay_task, inv_task, return_exceptions=True)
@@ -125,11 +154,21 @@ class CheckoutService:
                 return exc
             case httpx2.TimeoutException():
                 return DownstreamTimeoutError(service=service, reason=str(exc))
-            case httpx2.HTTPStatusError():
+            case httpx2.HTTPStatusError() as status_exc:
+                reason = str(status_exc)
+                try:
+                    data = status_exc.response.json()
+                    if isinstance(data, dict):
+                        reason = (
+                            data.get("error") or data.get("detail") or str(status_exc)
+                        )
+                except (ValueError, KeyError, TypeError, httpx2.DecodingError):
+                    if status_exc.response.text:
+                        reason = status_exc.response.text
                 return DownstreamStatusError(
                     service=service,
-                    reason=str(exc),
-                    upstream_status=exc.response.status_code,
+                    reason=str(reason),
+                    upstream_status=status_exc.response.status_code,
                 )
             case httpx2.RequestError():
                 return DownstreamTransportError(service=service, reason=str(exc))

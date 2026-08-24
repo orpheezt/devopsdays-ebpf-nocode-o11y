@@ -6,7 +6,6 @@ from pydantic_settings import (
 
 class SettingsSection(BaseSettings):
     model_config = SettingsConfigDict(
-        yaml_file="config.yaml",
         extra="ignore",
     )
 

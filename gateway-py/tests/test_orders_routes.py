@@ -7,7 +7,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from gateway_py.orders.dependencies import get_checkout_service
-from gateway_py.orders.errors import DownstreamError, DownstreamTimeoutError
+from gateway_py.orders.errors import (
+    DownstreamError,
+    DownstreamStatusError,
+    DownstreamTimeoutError,
+)
 from gateway_py.orders.schemas import OrderResponse, OrderSummary
 
 
@@ -112,7 +116,7 @@ def test_checkout_route_downstream_error(
     sample_product_id: uuid.UUID,
 ) -> None:
     mock_checkout_service.checkout.side_effect = DownstreamError(
-        service="inventory", reason="Out of stock", upstream_status=400
+        service="inventory", reason="Internal server failure"
     )
 
     test_app.dependency_overrides[get_checkout_service] = lambda: mock_checkout_service
@@ -133,6 +137,39 @@ def test_checkout_route_downstream_error(
         assert response.status_code == 502
         assert response.json() == {
             "detail": "The request could not be completed. Please try again."
+        }
+    finally:
+        test_app.dependency_overrides.clear()
+
+
+def test_checkout_route_downstream_client_error(
+    test_app: FastAPI,
+    client: TestClient,
+    mock_checkout_service: AsyncMock,
+    sample_product_id: uuid.UUID,
+) -> None:
+    mock_checkout_service.checkout.side_effect = DownstreamStatusError(
+        service="inventory", reason="Insufficient stock", upstream_status=409
+    )
+
+    test_app.dependency_overrides[get_checkout_service] = lambda: mock_checkout_service
+
+    try:
+        payload = {
+            "customer_id": "cust_123",
+            "items": [
+                {
+                    "product_id": str(sample_product_id),
+                    "quantity": 1,
+                    "unit_price": "15.00",
+                }
+            ],
+        }
+        response = client.post("/order", json=payload)
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "inventory service rejected the request: Insufficient stock"
         }
     finally:
         test_app.dependency_overrides.clear()

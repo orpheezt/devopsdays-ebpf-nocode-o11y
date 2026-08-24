@@ -1,10 +1,15 @@
 from fastapi import APIRouter
 
-from .schemas import HealthStatusResponse
+from .schemas import HealthStatusResponse, ReadinessStatusResponse
 
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
-async def health() -> HealthStatusResponse:
+@router.get("/livez")
+async def livez() -> HealthStatusResponse:
     return HealthStatusResponse()
+
+
+@router.get("/readyz")
+async def readyz() -> ReadinessStatusResponse:
+    return ReadinessStatusResponse()

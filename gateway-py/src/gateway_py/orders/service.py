@@ -62,9 +62,9 @@ class CheckoutService:
         pay_task = self._client.post(
             f"{self._settings.payment_url}/pay",
             json={
-                "order_id": order_id,
+                "order_id": str(order_id),
                 "customer_id": order.customer_id,
-                "amount": summary.total,
+                "amount": float(summary.total),
             },
         )
         inv_task = self._client.post(

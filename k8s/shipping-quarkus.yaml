@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping-quarkus
+  namespace: devopsdays
+  labels:
+    app: shipping-quarkus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping-quarkus
+  template:
+    metadata:
+      labels:
+        app: shipping-quarkus
+    spec:
+      containers:
+        - name: shipping-quarkus
+          image: localhost/shipping-quarkus:jvm
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8084
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8084
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping-quarkus
+  namespace: devopsdays
+  labels:
+    app: shipping-quarkus
+spec:
+  ports:
+    - port: 8084
+      targetPort: 8084
+      name: http
+  selector:
+    app: shipping-quarkus

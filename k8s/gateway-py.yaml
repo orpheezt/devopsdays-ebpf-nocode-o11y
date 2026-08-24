@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-py
+  namespace: devopsdays
+  labels:
+    app: gateway-py
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway-py
+  template:
+    metadata:
+      labels:
+        app: gateway-py
+    spec:
+      containers:
+        - name: gateway-py
+          image: localhost/api-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: ORDER_PAYMENT_URL
+              value: "http://payment-go:8081"
+            - name: ORDER_INVENTORY_URL
+              value: "http://inventory-rs:8082"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-py
+  namespace: devopsdays
+  labels:
+    app: gateway-py
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  selector:
+    app: gateway-py

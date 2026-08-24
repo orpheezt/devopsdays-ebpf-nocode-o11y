@@ -1,0 +1,95 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inventory-rs-migrations
+  namespace: devopsdays
+  labels:
+    app: inventory-rs-migrations
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: inventory-rs-migrations
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrations
+          image: localhost/inventory-rs-migrations:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_URL
+              value: "postgres://postgres:postgres@postgres:5432/inventory_db"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-rs
+  namespace: devopsdays
+  labels:
+    app: inventory-rs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-rs
+  template:
+    metadata:
+      labels:
+        app: inventory-rs
+    spec:
+      containers:
+        - name: inventory-rs
+          image: localhost/inventory-rs:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+              name: http
+          env:
+            - name: SERVER_ADDR
+              value: "0.0.0.0:8082"
+            - name: DATABASE_URL
+              value: "postgres://postgres:postgres@postgres:5432/inventory_db"
+            - name: SHIPPING_SERVICE_URL
+              value: "http://shipping-quarkus:8084/quote"
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8082
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8082
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-rs
+  namespace: devopsdays
+  labels:
+    app: inventory-rs
+spec:
+  ports:
+    - port: 8082
+      targetPort: 8082
+      name: http
+  selector:
+    app: inventory-rs

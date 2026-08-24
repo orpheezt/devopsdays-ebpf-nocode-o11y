@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+ARG RUST_VERSION=1.97.1
+
+FROM rust:${RUST_VERSION}-alpine AS build
+WORKDIR /app
+
+RUN apk add --no-cache clang lld musl-dev git
+
+RUN --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
+    --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
+    --mount=type=bind,source=Toasty.toml,target=Toasty.toml \
+    --mount=type=bind,source=toasty,target=toasty \
+    --mount=type=cache,target=/app/target/ \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
+    --mount=type=cache,target=/usr/local/cargo/registry/ \
+    cargo build --locked --release --bin migrations && \
+    cp ./target/release/migrations /bin/migrations
+
+FROM docker.io/bellsoft/alpaquita-linux-base:stream-glibc AS final
+
+RUN apk add --no-cache ca-certificates tzdata
+
+ARG UID=10001
+RUN adduser -u ${UID} -D -s /sbin/nologin appuser
+
+WORKDIR /app
+
+COPY --from=build /bin/migrations /bin/migrations
+COPY Toasty.toml /app/
+COPY toasty /app/toasty
+
+USER appuser
+
+ENTRYPOINT [ "/bin/migrations", "migration", "apply" ]

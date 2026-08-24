@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+FROM docker.io/library/golang:1.26.5-alpine3.24 AS builder
+
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+
+FROM docker.io/bellsoft/alpaquita-linux-base:stream-glibc AS final
+
+RUN apk add --no-cache ca-certificates tzdata
+
+ARG UID=10001
+RUN adduser -u ${UID} -D -s /sbin/nologin appuser
+
+WORKDIR /migrations
+
+COPY --from=builder /go/bin/goose /bin/goose
+COPY migrations /migrations
+
+USER appuser
+
+ENTRYPOINT [ "goose", "-dir", "/migrations", "postgres" ]
+CMD [ "up" ]

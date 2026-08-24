@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antifraud-fastify
+  namespace: devopsdays
+  labels:
+    app: antifraud-fastify
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: antifraud-fastify
+  template:
+    metadata:
+      labels:
+        app: antifraud-fastify
+    spec:
+      containers:
+        - name: antifraud-fastify
+          image: localhost/antifraud-fastify:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8083
+              name: http
+          env:
+            - name: PORT
+              value: "8083"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: ENVIRONMENT
+              value: "production"
+            - name: REDIS_URL
+              value: "redis://valkey:6379"
+            - name: ANTIFRAUD_SECRET_KEY
+              value: "antifraud-super-secret-key-2026"
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8083
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8083
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: antifraud-fastify
+  namespace: devopsdays
+  labels:
+    app: antifraud-fastify
+spec:
+  ports:
+    - port: 8083
+      targetPort: 8083
+      name: http
+  selector:
+    app: antifraud-fastify

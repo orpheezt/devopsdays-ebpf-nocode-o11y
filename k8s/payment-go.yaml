@@ -1,0 +1,109 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payment-go-migrations
+  namespace: devopsdays
+  labels:
+    app: payment-go-migrations
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: payment-go-migrations
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrations
+          image: localhost/payment-go-migrations:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "host=postgres port=5432 user=postgres password=postgres dbname=payment_db sslmode=disable"
+            - "up"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-go
+  namespace: devopsdays
+  labels:
+    app: payment-go
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-go
+  template:
+    metadata:
+      labels:
+        app: payment-go
+    spec:
+      containers:
+        - name: payment-go
+          image: localhost/payment-go:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: PORT
+              value: "8081"
+            - name: ENV
+              value: "production"
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "postgres"
+            - name: DB_PASSWORD
+              value: "postgres"
+            - name: DB_NAME
+              value: "payment_db"
+            - name: DB_SSLMODE
+              value: "disable"
+            - name: ANTIFRAUD_SERVICE_URL
+              value: "http://antifraud-fastify:8083"
+            - name: ANTIFRAUD_SECRET_KEY
+              value: "antifraud-super-secret-key-2026"
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-go
+  namespace: devopsdays
+  labels:
+    app: payment-go
+spec:
+  ports:
+    - port: 8081
+      targetPort: 8081
+      name: http
+  selector:
+    app: payment-go

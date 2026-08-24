@@ -12,3 +12,10 @@ CREATE TABLE "inventories" (
     "reserved_quantity" INTEGER NOT NULL,
     PRIMARY KEY ("product_id")
 );
+INSERT INTO "inventories" ("product_id", "product_name", "stock_quantity", "reserved_quantity")
+VALUES
+    ('0191234a-5b6c-7123-9000-000000000000', 'DevOpsDays T-Shirt', 1000, 0),
+    ('0191234a-5b6c-7123-9000-000000000001', 'eBPF Observability Sticker Pack', 500, 0),
+    ('0191234a-5b6c-7123-9000-000000000002', 'Cloud Native Coffee Mug', 250, 0)
+ON CONFLICT ("product_id") DO NOTHING;
+
